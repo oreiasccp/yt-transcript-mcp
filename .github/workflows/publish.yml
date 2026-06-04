@@ -1,0 +1,40 @@
+name: publish
+
+# Publishes to PyPI on a version tag (e.g. `v0.2.0`) via Trusted Publishing (OIDC) —
+# no API token stored in the repo. One-time setup on PyPI: add a Trusted Publisher for
+# project `yt-transcript-mcp`, owner `oreiasccp`, repo `yt-transcript-mcp`,
+# workflow `publish.yml`, environment `pypi`.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Build sdist + wheel
+        run: uv build
+      - name: Check distribution metadata
+        run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
