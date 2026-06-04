@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import re
 from typing import Any, Callable, Optional
+from urllib.parse import quote
 
 # defusedxml hardens against XXE / billion-laughs in the RSS feed parse.
 from defusedxml import ElementTree as ET
@@ -252,45 +253,61 @@ def video_info(url_or_id: str) -> dict:
 
 # --------------------------------------------------------------------------- flat listings
 
-def _flat_entries(target: str, limit: int) -> list[dict]:
+def _flat_entries(target: str, limit: int, offset: int = 0) -> dict:
+    """Flat-extract a listing and return a paginated envelope.
+
+    Fetches one extra entry (offset+limit+1) so we can report `has_more` without a second
+    request, then slices the requested window. YouTube doesn't expose a reliable total for
+    search/channel listings, so `total` is omitted; `has_more`/`next_offset` drive paging.
+    """
+    fetch_end = offset + limit + 1  # +1 sentinel to detect a further page
+
     def make_opts(use_cookies: bool) -> dict:
         return _base_opts(
             use_cookies,
             extract_flat="in_playlist",
-            playlistend=limit,
+            playliststart=1,
+            playlistend=fetch_end,
             noplaylist=False,
         )
 
-    def run(ydl: YoutubeDL) -> list[dict]:
+    def run(ydl: YoutubeDL) -> dict:
         info = ydl.extract_info(target, download=False)
-        entries = info.get("entries") or []
-        out = []
-        for e in entries[:limit]:
-            if not e:
-                continue
-            out.append(
-                {
-                    "id": e.get("id"),
-                    "title": e.get("title"),
-                    "url": e.get("url") or (f"https://www.youtube.com/watch?v={e.get('id')}"),
-                    "duration": e.get("duration"),
-                    "view_count": e.get("view_count"),
-                    "channel": e.get("channel") or e.get("uploader"),
-                    "channel_id": e.get("channel_id"),
-                }
-            )
-        return out
+        entries = [e for e in (info.get("entries") or []) if e]
+        has_more = len(entries) > offset + limit
+        window = entries[offset : offset + limit]
+        items = [
+            {
+                "id": e.get("id"),
+                "title": e.get("title"),
+                "url": e.get("url") or (f"https://www.youtube.com/watch?v={e.get('id')}"),
+                "duration": e.get("duration"),
+                "view_count": e.get("view_count"),
+                "channel": e.get("channel") or e.get("uploader"),
+                "channel_id": e.get("channel_id"),
+            }
+            for e in window
+        ]
+        return {
+            "count": len(items),
+            "offset": offset,
+            "items": items,
+            "has_more": has_more,
+            "next_offset": offset + len(items) if has_more else None,
+        }
 
     return with_escalation(make_opts, run)
 
 
-def search(query: str, search_type: str = "video", limit: int = 20) -> list[dict]:
+def search(query: str, search_type: str = "video", limit: int = 20, offset: int = 0) -> dict:
     if search_type == "channel":
-        # YouTube search prefix for channels
-        target = f"https://www.youtube.com/results?search_query={query}&sp=EgIQAg%253D%253D"
-        return _flat_entries(target, limit)
-    target = f"ytsearch{limit}:{query}"
-    return _flat_entries(target, limit)
+        # YouTube channel-search results page; query must be URL-encoded.
+        target = f"https://www.youtube.com/results?search_query={quote(query)}&sp=EgIQAg%253D%253D"
+        return _flat_entries(target, limit, offset)
+    # ytsearchN:<query> — N is the raw count yt-dlp fetches from the top; query is literal
+    # search syntax (NOT a URL), so it must NOT be percent-encoded.
+    target = f"ytsearch{offset + limit + 1}:{query}"
+    return _flat_entries(target, limit, offset)
 
 
 def _channel_base(channel: str) -> str:
@@ -304,20 +321,20 @@ def _channel_base(channel: str) -> str:
     return f"https://www.youtube.com/@{c}"
 
 
-def list_channel_videos(channel: str, limit: int = 50) -> list[dict]:
-    return _flat_entries(_channel_base(channel) + "/videos", limit)
+def list_channel_videos(channel: str, limit: int = 50, offset: int = 0) -> dict:
+    return _flat_entries(_channel_base(channel) + "/videos", limit, offset)
 
 
-def search_channel_videos(channel: str, query: str, limit: int = 30) -> list[dict]:
-    target = f"{_channel_base(channel)}/search?query={query}"
-    return _flat_entries(target, limit)
+def search_channel_videos(channel: str, query: str, limit: int = 30, offset: int = 0) -> dict:
+    target = f"{_channel_base(channel)}/search?query={quote(query)}"
+    return _flat_entries(target, limit, offset)
 
 
-def list_playlist_videos(playlist: str, limit: int = 100) -> list[dict]:
+def list_playlist_videos(playlist: str, limit: int = 100, offset: int = 0) -> dict:
     p = playlist.strip()
     if not p.startswith("http"):
         p = f"https://www.youtube.com/playlist?list={p}"
-    return _flat_entries(p, limit)
+    return _flat_entries(p, limit, offset)
 
 
 # --------------------------------------------------------------------------- RSS (free)

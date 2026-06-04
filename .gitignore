@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 .cache/
 *.db
+
+# build / packaging artifacts
+dist/
+build/
+*.egg-info/
+.pytest_cache/

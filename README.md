@@ -3,6 +3,11 @@
 Local, self-hosted MCP server for YouTube transcripts + search. Runs from your own
 (residential) IP alongside Claude Code — no third-party API, no credits, no account.
 
+[![test](https://github.com/oreiasccp/yt-transcript-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/oreiasccp/yt-transcript-mcp/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/yt-transcript-mcp.svg)](https://pypi.org/project/yt-transcript-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/yt-transcript-mcp.svg)](https://pypi.org/project/yt-transcript-mcp/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Why local wins (2026):** YouTube blocks most cloud-provider IPs (AWS/GCP/Azure). Running
 from your home IP sidesteps the bot-detection that breaks server-hosted scrapers. See the
 research that drove this design below.
@@ -40,7 +45,7 @@ and are instant. Whisper is a fallback for caption-less videos.
 |------|-----|-----------|
 | Python 3.10+ and [uv](https://docs.astral.sh/uv/) | runtime + deps | **Yes** |
 | `ffmpeg` on PATH | audio extraction for the Whisper fallback (caption-less videos) and the `transcribe_local_file` container fallback | only when PyAV can't decode a container |
-| NVIDIA GPU + CUDA driver | fast local Whisper (falls back to CPU int8) | optional |
+| NVIDIA GPU + CUDA driver | GPU is the priority device for Whisper (CUDA libs are bundled by default). Without a GPU it falls back to CPU (int8) automatically. | optional |
 | A browser logged into YouTube (Chrome) | cookie escalation when YouTube flags a request | optional (helps reliability) |
 
 The native-caption path (most videos) needs only Python + uv. YouTube Premium helps:
@@ -48,28 +53,60 @@ Premium accounts are exempt from the GVS PO-token requirement.
 
 ## Install & register (copy-paste)
 
+### Option A — from PyPI with `uvx` (recommended, no clone)
+
+`uvx` fetches the published package into an isolated cache and runs it — the same launch
+idiom as the reference servers (`uvx mcp-server-git`). GPU acceleration is bundled by default
+(NVIDIA, non-macOS) and the server falls back to CPU automatically when no GPU is present.
+
 ```sh
-# clone
-gh repo clone oreiasccp/yt-transcript-mcp
-cd yt-transcript-mcp
-
-# install dependencies
-uv sync
-
-# register globally in Claude Code (works in every project + the VS Code extension)
-claude mcp add -s user yt-transcript -- uv --directory "$(pwd)" run yt-transcript-mcp
+claude mcp add -s user yt-transcript -- uvx yt-transcript-mcp
 ```
 
-`$(pwd)` resolves to wherever you cloned it — no hardcoded path. On Windows PowerShell use
-`"$((Get-Location).Path)"` instead of `"$(pwd)"`.
+### Option B — from source (for development or local edits)
 
-Verify:
+```sh
+# clone + install dependencies into a managed .venv
+gh repo clone oreiasccp/yt-transcript-mcp
+cd yt-transcript-mcp
+uv sync
+```
+
+Then register the server in Claude Code. Pick the launch command that matches how you
+installed it:
+
+```sh
+# Recommended (stable): the console-script entry point in the project venv.
+# One process, no per-launch re-sync — the launch idiom used by the reference servers.
+claude mcp add -s user yt-transcript -- "$(pwd)/.venv/bin/yt-transcript-mcp"
+# Windows PowerShell:
+#   claude mcp add -s user yt-transcript -- "$((Get-Location).Path)\.venv\Scripts\yt-transcript-mcp.exe"
+
+# Equivalent, SDK-canonical: run the package as a module.
+claude mcp add -s user yt-transcript -- "$(pwd)/.venv/bin/python" -m yt_transcript_mcp
+```
+
+> **Why not `uv --directory … run`?** `uv run` re-syncs the *editable* project on every
+> launch, which rewrites the console-script binary. On Windows the binary is often still
+> open from the previous launch, so the rewrite fails (`os error 32`), the server can't
+> start (`-32000 Connection closed`), and orphaned processes accumulate. Launching the
+> installed entry point (or `python -m`) skips the re-sync entirely. Reserve `uv run` for
+> local development (`uv run mcp dev` / `uv run pytest`), not as a registered server command.
+
+Verify, then use it:
 
 ```sh
 claude mcp list      # → yt-transcript: ... ✓ Connected
 ```
 
 Then ask Claude Code: *"get the transcript of <youtube-url> and summarize it."*
+
+### Run standalone (without the registry)
+
+```sh
+uv run yt-transcript-mcp        # dev
+python -m yt_transcript_mcp     # after `uv sync` / pip install (stdio server)
+```
 
 ## Configuration (env vars)
 
@@ -81,6 +118,7 @@ Then ask Claude Code: *"get the transcript of <youtube-url> and summarize it."*
 | `YT_WHISPER_COMPUTE` | `int8_float16` | Quantization. `float16`, `int8`. |
 | `YT_WHISPER_VAD` | `0` | Voice-activity-detection filter. **Off by default** — the bundled VAD over-filters and can drop all segments in the current faster-whisper. Set `1` to try it. |
 | `YT_MCP_CACHE_DIR` | `~/.cache/yt-transcript-mcp` | SQLite cache location. |
+| `YT_MCP_ALLOWED_DIRS` | _(unset)_ | Restrict `transcribe_local_file` to these directories (OS-path-separator list, e.g. `/home/me/media:/tmp` or `D:\media;C:\Users\me\Downloads`). Unset = unrestricted, appropriate for a local single-user server. |
 
 ## Notes & caveats
 
@@ -93,6 +131,26 @@ Then ask Claude Code: *"get the transcript of <youtube-url> and summarize it."*
   defensively iterates formats/tracks to route around it.
 - **Captions can be POT-gated** on specific videos (#13075) — intermittent, not universal. When
   the cookieless caption fetch fails, the cookie retry usually recovers it.
+
+## Releasing (maintainers)
+
+Publishing is automated via PyPI **Trusted Publishing** (OIDC — no API token in the repo):
+
+```sh
+# 1. bump `version` in pyproject.toml, commit
+# 2. tag and push — the publish workflow builds, checks, and uploads to PyPI
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+One-time PyPI setup: add a Trusted Publisher for project `yt-transcript-mcp` pointing at
+this repo's `publish.yml` workflow and the `pypi` environment. Local dry run:
+
+```sh
+uv build && uvx twine check dist/*
+```
+
+The MCP registry manifest lives in [`server.json`](server.json); submit/update it with the
+`mcp-publisher` CLI after the PyPI release is live.
 
 ## Research basis
 

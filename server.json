@@ -1,0 +1,39 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.oreiasccp/yt-transcript-mcp",
+  "title": "YouTube Transcript + Search (local)",
+  "description": "Local, self-hosted MCP for YouTube transcripts (native captions first, faster-whisper fallback), local audio/video transcription, and YouTube search. Runs from your own residential IP.",
+  "version": "0.2.0",
+  "repository": {
+    "url": "https://github.com/oreiasccp/yt-transcript-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "yt-transcript-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "YT_COOKIES_BROWSER",
+          "description": "Browser yt-dlp reads cookies from on the escalation retry (chrome, firefox, edge, brave…; empty to disable).",
+          "isRequired": false
+        },
+        {
+          "name": "YT_WHISPER_DEVICE",
+          "description": "faster-whisper device: 'cuda' (default, GPU-first) or 'cpu'. Falls back to CPU automatically when no GPU is present.",
+          "isRequired": false
+        },
+        {
+          "name": "YT_MCP_ALLOWED_DIRS",
+          "description": "Restrict transcribe_local_file to these directories (OS-path-separator list). Unset = unrestricted.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

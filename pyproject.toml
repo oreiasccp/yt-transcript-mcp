@@ -1,25 +1,52 @@
 [project]
 name = "yt-transcript-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local MCP server for YouTube transcripts (native captions first, faster-whisper fallback) + search/channel/playlist tools. Runs from your residential IP alongside Claude Code."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Rafael Lopes" }]
 keywords = ["mcp", "youtube", "transcript", "captions", "whisper", "yt-dlp", "claude"]
 requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "mcp[cli]>=1.2.0",
     "yt-dlp>=2025.11.0",
     "faster-whisper>=1.1.0",
     "defusedxml>=0.7.1",
-    # CUDA runtime libs for faster-whisper on NVIDIA GPUs (CTranslate2 needs cuBLAS + cuDNN 9).
-    # Pulled automatically on install; harmless on CPU-only machines.
+    # CUDA runtime libs for GPU-accelerated faster-whisper (CTranslate2 needs cuBLAS + cuDNN 9).
+    # GPU is the priority device; the server falls back to CPU int8 at runtime if no GPU is
+    # present (see transcribe.py). Bundled in the base install so GPU works out of the box on
+    # any NVIDIA machine. Excluded on macOS (no CUDA) via the platform marker.
     "nvidia-cublas-cu12; platform_system != 'Darwin'",
     "nvidia-cudnn-cu12>=9.0.0; platform_system != 'Darwin'",
 ]
 
+[project.optional-dependencies]
+# Marker extra so `pip/uvx install "yt-transcript-mcp[gpu]"` stays valid/explicit; the GPU
+# libs are already in the base dependencies, so this resolves to the same set.
+gpu = []
+
+[project.urls]
+Homepage = "https://github.com/oreiasccp/yt-transcript-mcp"
+Repository = "https://github.com/oreiasccp/yt-transcript-mcp"
+Issues = "https://github.com/oreiasccp/yt-transcript-mcp/issues"
+
 [project.scripts]
 yt-transcript-mcp = "yt_transcript_mcp.server:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [build-system]
 requires = ["hatchling"]

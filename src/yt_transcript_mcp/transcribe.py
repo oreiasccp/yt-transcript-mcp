@@ -8,7 +8,7 @@ Override via env: YT_WHISPER_MODEL, YT_WHISPER_DEVICE, YT_WHISPER_COMPUTE.
 from __future__ import annotations
 
 import os
-from typing import Optional
+from typing import Callable, Optional
 
 _MODEL = None
 _MODEL_KEY = None
@@ -37,7 +37,11 @@ def _load():
     return _MODEL
 
 
-def transcribe(audio_path: str, language: Optional[str] = None) -> dict:
+def transcribe(
+    audio_path: str,
+    language: Optional[str] = None,
+    on_progress: Optional[Callable[[float, float], None]] = None,
+) -> dict:
     """Transcribe a local audio file. Returns {"segments", "lang", "duration"}.
 
     segments: [{"text", "start", "duration"}] matching the caption-path shape.
@@ -45,6 +49,10 @@ def transcribe(audio_path: str, language: Optional[str] = None) -> dict:
     Uses plain (non-batched) decoding with VAD: the BatchedInferencePipeline + VAD combo
     silently drops all segments on some audio in current faster-whisper, so we trade a bit
     of throughput for correctness — fine for one-video-at-a-time local use.
+
+    on_progress(seconds_done, total_seconds): optional callback invoked as each segment is
+    decoded (faster-whisper yields lazily), letting callers report progress on long media.
+    Exceptions from the callback are swallowed so progress reporting can never break a run.
     """
     model = _load()
     segments_iter, info = model.transcribe(
@@ -53,8 +61,14 @@ def transcribe(audio_path: str, language: Optional[str] = None) -> dict:
         vad_filter=DEFAULT_VAD,
         beam_size=5,
     )
+    total = info.duration or 0.0
     out = []
     for seg in segments_iter:
+        if on_progress is not None:
+            try:
+                on_progress(float(seg.end), float(total))
+            except Exception:
+                pass
         text = seg.text.strip()
         if not text:
             continue
