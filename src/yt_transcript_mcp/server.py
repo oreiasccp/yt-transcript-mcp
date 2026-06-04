@@ -8,6 +8,9 @@ All results cached in SQLite so repeated calls never re-hit YouTube.
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import tempfile
 from typing import Optional
 
@@ -127,6 +130,95 @@ def _format_transcript(
         base["segments"] = result["segments"]
     else:
         base["transcript"] = parse.segments_to_text(result["segments"], include_timestamps)
+    return base
+
+
+# --------------------------------------------------------------------------- local files
+
+# Containers PyAV/faster-whisper decodes directly; others get an ffmpeg pre-extract.
+_AUDIO_EXTS = {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
+_VIDEO_EXTS = {".mp4", ".mkv", ".mov", ".webm", ".avi", ".flv", ".wmv", ".m4v", ".mpeg", ".mpg", ".3gp"}
+
+
+def _ffmpeg_extract_audio(src: str, dst_dir: str) -> str:
+    """Pull a 16kHz mono wav out of any container ffmpeg can read. Raises if ffmpeg missing."""
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg not on PATH; cannot pre-extract audio from this container")
+    out = os.path.join(dst_dir, "audio.wav")
+    subprocess.run(
+        [ffmpeg, "-nostdin", "-y", "-i", src, "-vn", "-ac", "1", "-ar", "16000", out],
+        check=True,
+        capture_output=True,
+    )
+    return out
+
+
+@mcp.tool()
+def transcribe_local_file(
+    path: str,
+    lang: Optional[str] = None,
+    output: str = "text",
+    include_timestamps: bool = True,
+) -> dict:
+    """Transcribe a LOCAL audio OR video file with faster-whisper. No YouTube, no network.
+
+    faster-whisper decodes the audio stream directly via PyAV, so video files (mp4, mkv,
+    mov, webm…) are transcribed without a separate audio-extraction step. If PyAV can't
+    open the container, falls back to an ffmpeg pre-extract (16kHz mono wav) when ffmpeg
+    is on PATH.
+
+    Args:
+        path: Absolute or relative path to a local audio/video file.
+        lang: Language code hint (e.g. "en", "pt"). None = auto-detect.
+        output: "text" (markdown with [t] timestamps) or "json" (segments + duration).
+        include_timestamps: Include per-segment timestamps in text output.
+
+    Returns:
+        {"path", "source", "lang", "duration", "segment_count",
+         "transcript"/"segments"}  — or {"error", ...} on failure.
+    """
+    p = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isfile(p):
+        return {"error": f"File not found: {path!r}"}
+
+    ext = os.path.splitext(p)[1].lower()
+    if ext and ext not in _AUDIO_EXTS and ext not in _VIDEO_EXTS:
+        # Not fatal — PyAV may still decode it — but warn the caller in the result.
+        unknown_ext = ext
+    else:
+        unknown_ext = None
+
+    # 1) Try faster-whisper directly (PyAV handles most audio + video containers).
+    try:
+        tr = transcribe.transcribe(p, language=lang)
+        source = "whisper:faster-whisper"
+    except Exception as direct_err:
+        # 2) ffmpeg pre-extract fallback for containers PyAV can't open.
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                wav = _ffmpeg_extract_audio(p, tmp)
+                tr = transcribe.transcribe(wav, language=lang)
+            source = "whisper:faster-whisper+ffmpeg"
+        except Exception as ff_err:
+            return {
+                "path": p,
+                "error": f"Transcription failed (direct: {direct_err}; ffmpeg fallback: {ff_err})",
+            }
+
+    base = {
+        "path": p,
+        "source": source,
+        "lang": tr["lang"],
+        "duration": tr["duration"],
+        "segment_count": len(tr["segments"]),
+    }
+    if unknown_ext:
+        base["warning"] = f"Unrecognized extension {unknown_ext!r}; decoded anyway."
+    if output == "json":
+        base["segments"] = tr["segments"]
+    else:
+        base["transcript"] = parse.segments_to_text(tr["segments"], include_timestamps)
     return base
 
 

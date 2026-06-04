@@ -26,6 +26,7 @@ and are instant. Whisper is a fallback for caption-less videos.
 | Tool | What |
 |------|------|
 | `get_transcript` | Transcript via captions → Whisper fallback. Returns video metadata (title, channel, duration, views, thumbnail) alongside the text. Args: `output=text\|json`, `lang`, `include_timestamps`, `allow_whisper`, `send_metadata`. |
+| `transcribe_local_file` | Transcribe a **local** audio **or** video file (no YouTube, no network) with faster-whisper. Video containers (mp4/mkv/mov/webm…) are decoded directly via PyAV — no separate audio extraction — with an `ffmpeg` pre-extract fallback for containers PyAV can't open. Args: `path`, `lang`, `output=text\|json`, `include_timestamps`. |
 | `get_video_info` | Title, channel, duration, views, caption availability. |
 | `search_youtube` | Search videos or channels (`search_type=video\|channel`). |
 | `list_channel_videos` | Recent videos on a channel (`@handle` / URL / `UC…`). |
@@ -38,7 +39,7 @@ and are instant. Whisper is a fallback for caption-less videos.
 | Need | Why | Required? |
 |------|-----|-----------|
 | Python 3.10+ and [uv](https://docs.astral.sh/uv/) | runtime + deps | **Yes** |
-| `ffmpeg` on PATH | audio extraction for the Whisper fallback | only for caption-less videos |
+| `ffmpeg` on PATH | audio extraction for the Whisper fallback (caption-less videos) and the `transcribe_local_file` container fallback | only when PyAV can't decode a container |
 | NVIDIA GPU + CUDA driver | fast local Whisper (falls back to CPU int8) | optional |
 | A browser logged into YouTube (Chrome) | cookie escalation when YouTube flags a request | optional (helps reliability) |
 
