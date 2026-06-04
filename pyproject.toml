@@ -6,14 +6,15 @@ readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "Rafael Lopes" }]
 keywords = ["mcp", "youtube", "transcript", "captions", "whisper", "yt-dlp", "claude"]
-requires-python = ">=3.10"
+# 3.11+ : a transitive dep (onnxruntime, via faster-whisper's VAD) no longer ships
+# wheels for CPython 3.10, so the package can't install there.
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Multimedia :: Sound/Audio :: Speech",

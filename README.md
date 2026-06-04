@@ -43,7 +43,7 @@ and are instant. Whisper is a fallback for caption-less videos.
 
 | Need | Why | Required? |
 |------|-----|-----------|
-| Python 3.10+ and [uv](https://docs.astral.sh/uv/) | runtime + deps | **Yes** |
+| Python 3.11+ and [uv](https://docs.astral.sh/uv/) | runtime + deps | **Yes** |
 | `ffmpeg` on PATH | audio extraction for the Whisper fallback (caption-less videos) and the `transcribe_local_file` container fallback | only when PyAV can't decode a container |
 | NVIDIA GPU + CUDA driver | GPU is the priority device for Whisper (CUDA libs are bundled by default). Without a GPU it falls back to CPU (int8) automatically. | optional |
 | A browser logged into YouTube (Chrome) | cookie escalation when YouTube flags a request | optional (helps reliability) |
