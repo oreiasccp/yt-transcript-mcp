@@ -35,22 +35,37 @@ and are instant. Whisper is a fallback for caption-less videos.
 
 ## Requirements
 
-- Python 3.10+, [uv](https://docs.astral.sh/uv/), `ffmpeg` on PATH
-- NVIDIA GPU + CUDA for the Whisper fallback (optional — falls back to CPU int8)
-- A browser logged into YouTube (Chrome by default) for the cookie escalation. YouTube
-  Premium helps: Premium accounts are exempt from the GVS PO-token requirement.
+| Need | Why | Required? |
+|------|-----|-----------|
+| Python 3.10+ and [uv](https://docs.astral.sh/uv/) | runtime + deps | **Yes** |
+| `ffmpeg` on PATH | audio extraction for the Whisper fallback | only for caption-less videos |
+| NVIDIA GPU + CUDA driver | fast local Whisper (falls back to CPU int8) | optional |
+| A browser logged into YouTube (Chrome) | cookie escalation when YouTube flags a request | optional (helps reliability) |
 
-## Install
+The native-caption path (most videos) needs only Python + uv. YouTube Premium helps:
+Premium accounts are exempt from the GVS PO-token requirement.
+
+## Install & register (copy-paste)
 
 ```sh
+# clone
+gh repo clone oreiasccp/yt-transcript-mcp
 cd yt-transcript-mcp
+
+# install dependencies
 uv sync
+
+# register globally in Claude Code (works in every project + the VS Code extension)
+claude mcp add -s user yt-transcript -- uv --directory "$(pwd)" run yt-transcript-mcp
 ```
 
-## Register in Claude Code
+`$(pwd)` resolves to wherever you cloned it — no hardcoded path. On Windows PowerShell use
+`"$((Get-Location).Path)"` instead of `"$(pwd)"`.
+
+Verify:
 
 ```sh
-claude mcp add yt-transcript -- uv --directory "D:/code/claudecode/yt-transcript-mcp" run yt-transcript-mcp
+claude mcp list      # → yt-transcript: ... ✓ Connected
 ```
 
 Then ask Claude Code: *"get the transcript of <youtube-url> and summarize it."*

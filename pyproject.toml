@@ -2,6 +2,10 @@
 name = "yt-transcript-mcp"
 version = "0.1.0"
 description = "Local MCP server for YouTube transcripts (native captions first, faster-whisper fallback) + search/channel/playlist tools. Runs from your residential IP alongside Claude Code."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Rafael Lopes" }]
+keywords = ["mcp", "youtube", "transcript", "captions", "whisper", "yt-dlp", "claude"]
 requires-python = ">=3.10"
 dependencies = [
     "mcp[cli]>=1.2.0",
