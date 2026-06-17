@@ -248,7 +248,7 @@ async def get_transcript(
     "segment_count", "metadata"?, and either "transcript" (text) or "segments" (json)}.
     On failure: {"error", ...} with an actionable message.
     """
-    result = await _get_transcript_sync(video_url, lang, allow_whisper, _make_progress(ctx))
+    result = await _to_thread(_get_transcript_sync, video_url, lang, allow_whisper, _make_progress(ctx))
     if "error" in result and "segments" not in result:
         return result
     from_cache = result.pop("_from_cache", False)
